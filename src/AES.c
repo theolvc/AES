@@ -152,10 +152,15 @@ int main(int argc, char **argv) {
                     "\t\tAES -d [-k FILE] TEXT_FILE\n"
                     "Cipher or decipher the TEXT_FILE using AES.\n"
                     "-w, -WBC \t\t\tuse the White-Box ciphering.\n"
-                    "-k FILE, --key FILE \t\tuse the key in the file (Please use a 128-bit key)\n"
-                    "-d, --decipher \t\t\tswitch to decipher mode\n"
+                    "-k FILE, --key FILE \t\tuse the key in the file (Please use a 128-bit key for White-Box)\n"
+                    "-d [TAG], --decipher [TAG] \tswitch to decipher mode (need a tag for GCM encoding mode)\n"
                     "-h, --help \t\t\tdisplay this help and exit\n"
-                    "Others options are not relevant for the White-Box AES.\n");
+                    "Others options are not relevant for the White-Box AES.\n"
+                    "The encoding mode is ECB by default, these options change the encoding mode :\n"
+                    "-c IV_FILE, --CBC IV_FILE \tswitch the encoding mode to CBC.\n"
+                    "-f IV_FILE, --CFB IV_FILE \tswitch the encoding mode to CFB.\n"
+                    "-o IV_FILE, --OFB IV_FILE \tswitch the encoding mode to OFB.\n"
+                    "-g IV_FILE, --GCM IV_FILE \tswitch the encoding mode to GCM.\n");
                 exit(EXIT_SUCCESS);
 
             default:
