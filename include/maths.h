@@ -8,9 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "state.h"
-
 uint8_t multiplication(uint8_t a, uint8_t b);
-void multiplication_GF128(state_t *tag, state_t *H);
+void multiplication_GF128(uint8_t tag[16], const uint8_t H[16]);
 
 #endif /* MATHS_H */

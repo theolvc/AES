@@ -3,7 +3,7 @@
 
 // Create the T-Boxes that will store the AddRoundKey and the SubBytes steps
 void T_box(uint8_t* key, uint8_t TBox[10][16][256]) {
-    uint8_t* temp = (uint8_t*)malloc(176 * sizeof(uint8_t));
+    uint8_t temp[176]; 
     expansionKey(key, temp, 10);
     uint8_t expanded_key[11][16];
     // Store the expanded_key in a 11x16 array to be easier to transfer into my own state_t type
@@ -12,25 +12,20 @@ void T_box(uint8_t* key, uint8_t TBox[10][16][256]) {
             expanded_key[i][j] = temp[16 * i + j];
         }
     }
-    free(temp);
-    state_t** state_key = (state_t**)malloc(11 * sizeof(state_t*));
+    uint8_t state_key[11][16];
+
     for (int i = 0; i < 10; i++) {
-        state_key[i] = (state_t*)malloc(sizeof(state_t));
-        state_allocate(state_key[i], 16);
-        IV_to_state(state_key[i], expanded_key[i]);  // Name used in the original implementation of AES, it only
-                                                     // transfers a uint8_t* to a state_t
+        memcpy(state_key[i], expanded_key[i], 16);
         ShiftRows(state_key[i]);
     }
-    state_key[10] = (state_t*)malloc(sizeof(state_t));
-    state_allocate(state_key[10], 16);
-    IV_to_state(state_key[10], expanded_key[10]);
+    memcpy(state_key[10], expanded_key[10], 16);
 
     // Apply the value for each T-box
     for (int i = 0; i < 9; i++) {
         for (int j = 0; j < 4; j++) {
             for (int k = 0; k < 4; k++) {
                 for (int l = 0; l < 256; l++) {
-                    TBox[i][4 * j + k][l] = get_Sbox(l ^ get_byte(state_key[i], k, j));
+                    TBox[i][4 * j + k][l] = get_Sbox(l ^ state_key[i][4 * j + k]);
                 }
             }
         }
@@ -38,16 +33,10 @@ void T_box(uint8_t* key, uint8_t TBox[10][16][256]) {
     for (int j = 0; j < 4; j++) {
         for (int k = 0; k < 4; k++) {
             for (int l = 0; l < 256; l++) {
-                TBox[9][4 * j + k][l] = get_Sbox(l ^ get_byte(state_key[9], k, j)) ^ get_byte(state_key[10], k, j);
+                TBox[9][4 * j + k][l] = get_Sbox(l ^ state_key[9][4 * j + k]) ^ state_key[10][4 * j + k];
             }
         }
     }
-
-    for (int i = 0; i < 11; i++) {
-        state_free(state_key[i]);
-        free(state_key[i]);
-    }
-    free(state_key);
 }
 
 // Create the Tyi Tables
@@ -118,21 +107,39 @@ uint32_t Xor4by4(uint8_t Xor[16][16], uint32_t a, uint32_t b) {
 }
 
 // First version of the ciphering in the White-Box AES, without encoding the tables
-void WBC_cipher(state_t** blocks, long blocks_number, uint32_t TBoxesTyiTables[9][16][256], uint8_t lastTbox[16][256],
-                uint8_t Xor[9][96][16][16]) {
+void WBC_cipher(FILE* file, long blocks_number, uint32_t TBoxesTyiTables[9][16][256], uint8_t lastTbox[16][256], uint8_t Xor[9][96][16][16]) {
     uint32_t TBoxTyiResult[16];
     uint32_t firstXor[8];
     uint32_t secondXor[4];
+    uint8_t block[16];
+    char texte[16];
+
+    FILE *output_file = fopen("cipher.txt", "w+");
+    if (output_file == NULL) {
+        errx(EXIT_FAILURE, "Couldn't create cipher.txt, exit.");
+    }
+    bool padding = (text_length(file) % 16 != 0);
 
     // Cipher all blocks
     for (long i = 0; i < blocks_number; i++) {
+        if (i < blocks_number - 1) {
+            fread(block, 1, 16, file);
+        } else {
+            if (!padding) {
+                memset(block, 16, 16);
+            } else {
+                size_t read_bytes = fread(block, 1, 16, file);
+                for (size_t j = read_bytes; j < 16; j++) {
+                    block[j] = 16 - read_bytes;
+                }
+            }
+        }
         // Cipher one block
         for (int r = 0; r < 9; r++) {
-            ShiftRows(blocks[i]);
+            ShiftRows(block);
             for (int j = 0; j < 4; j++) {
                 for (int k = 0; k < 4; k++) {
-                    TBoxTyiResult[4 * j + k] = TBoxesTyiTables[r][4 * j + k][get_byte(
-                        blocks[i], k, j)];  // Gets the result in the composing table
+                    TBoxTyiResult[4 * j + k] = TBoxesTyiTables[r][4 * j + k][block[4 * j + k]];  // Gets the result in the composing table
                 }
             }
             // XOR the results 2 by 2
@@ -145,19 +152,21 @@ void WBC_cipher(state_t** blocks, long blocks_number, uint32_t TBoxesTyiTables[9
             }
             // secondXor now contains the cipher state (32-bit by 32-bit), we change the value of the state
             for (int j = 0; j < 4; j++) {
-                set_byte(blocks[i], (secondXor[j] >> 24) & 0xFF, 0, j);
-                set_byte(blocks[i], (secondXor[j] >> 16) & 0xFF, 1, j);
-                set_byte(blocks[i], (secondXor[j] >> 8) & 0xFF, 2, j);
-                set_byte(blocks[i], secondXor[j] & 0xFF, 3, j);
+                block[4 * j] = (secondXor[j] >> 24) & 0xFF;
+                block[4 * j + 1] = (secondXor[j] >> 16) & 0xFF;
+                block[4 * j + 2] = (secondXor[j] >> 8) & 0xFF;
+                block[4 * j + 3] = secondXor[j] & 0xFF;
             }
         }
         // Last round
-        ShiftRows(blocks[i]);
+        ShiftRows(block);
         for (int j = 0; j < 4; j++) {
             for (int k = 0; k < 4; k++) {
-                set_byte(blocks[i], lastTbox[4 * j + k][get_byte(blocks[i], k, j)], k, j);
+                block[4 * j + k] = lastTbox[4 * j + k][block[4 * j + k]];
             }
         }
+        memcpy(texte, block, 16);
+        fwrite(texte, 1, 16, output_file);
     }
 }
 
@@ -262,22 +271,42 @@ void mixBijections(uint32_t mixInput[10][16][256], uint32_t mixOutput[9][16][256
 
 // Second version of the ciphering in the White-Box AES, with now the encoded tables
 // NB : The XOR Tables are not encoded and should be encoded for better security, right now the tables are all the same
-void WBC_cipher_v2(state_t** blocks, long blocks_number, uint32_t mixInput[10][16][256], uint32_t mixOutput[9][16][256],
+void WBC_cipher_v2(FILE *file, long blocks_number, uint32_t mixInput[10][16][256], uint32_t mixOutput[9][16][256],
                    uint8_t Xor[9][96][16][16]) {
     // The first part is the same as the first version
     uint32_t TBoxTyiResult[16];
     uint32_t firstXor[8];
     uint32_t secondXor[4];
+    uint8_t block[16];
+    char texte[16];
+
+    FILE *output_file = fopen("cipher.txt", "w+");
+    if (output_file == NULL) {
+        errx(EXIT_FAILURE, "Couldn't create cipher.txt, exit.");
+    }
+    bool padding = (text_length(file) % 16 != 0);
 
     // Cipher all blocks
     for (long i = 0; i < blocks_number; i++) {
+        if (i < blocks_number - 1) {
+            fread(block, 1, 16, file);
+        } else {
+            if (!padding) {
+                memset(block, 16, 16);
+            } else {
+                size_t read_bytes = fread(block, 1, 16, file);
+                for (size_t j = read_bytes; j < 16; j++) {
+                    block[j] = 16 - read_bytes;
+                }
+            }
+        }
         // Cipher one block
         for (int r = 0; r < 9; r++) {
-            ShiftRows(blocks[i]);
+            ShiftRows(block);
             // Gets the result in the mixInput table
             for (int j = 0; j < 4; j++) {
                 for (int k = 0; k < 4; k++) {
-                    TBoxTyiResult[4 * j + k] = mixInput[r][4 * j + k][get_byte(blocks[i], k, j)];
+                    TBoxTyiResult[4 * j + k] = mixInput[r][4 * j + k][block[4 * j + k]];
                 }
             }
             // XOR the results 2 by 2
@@ -309,19 +338,21 @@ void WBC_cipher_v2(state_t** blocks, long blocks_number, uint32_t mixInput[10][1
             }
             // Now secondXor contains the cipher state (32-bit by 32-bit), we change the value of the state
             for (int j = 0; j < 4; j++) {
-                set_byte(blocks[i], (secondXor[j] >> 24) & 0xFF, 0, j);
-                set_byte(blocks[i], (secondXor[j] >> 16) & 0xFF, 1, j);
-                set_byte(blocks[i], (secondXor[j] >> 8) & 0xFF, 2, j);
-                set_byte(blocks[i], secondXor[j] & 0xFF, 3, j);
+                block[4 * j] = (secondXor[j] >> 24) & 0xFF;
+                block[4 * j + 1] = (secondXor[j] >> 16) & 0xFF;
+                block[4 * j + 2] = (secondXor[j] >> 8) & 0xFF;
+                block[4 * j + 3] = secondXor[j] & 0xFF;
             }
         }
         // Last round
-        ShiftRows(blocks[i]);
+        ShiftRows(block);
         for (int j = 0; j < 4; j++) {
             for (int k = 0; k < 4; k++) {
-                set_byte(blocks[i], mixInput[9][4 * j + k][get_byte(blocks[i], k, j)], k, j);
+                block[4 * j + k] = mixInput[9][4 * j + k][block[4 * j + k]];
                 // No output encoding for the last round
             }
         }
+        memcpy(texte, block, 16);
+        fwrite(texte, 1, 16, output_file);
     }
 }

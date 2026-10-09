@@ -1,13 +1,13 @@
 INCLUDEDIR=../include
-CFLAGS=-std=c11 -Wall -Wextra -g -O3
+CFLAGS=-std=c11 -Wall -Wextra -g -O3 -flto -march=native
 CPPFLAGS=-I$(INCLUDEDIR)
 LDFLAGS = -lm
 CC = gcc
 
 all: ../AES
 
-../AES: AES.o maths.o cipher.o state.o block.o WBC.o
-	$(CC) $(CFLAGS) -o ../AES AES.o maths.o cipher.o state.o block.o WBC.o
+../AES: AES.o maths.o cipher.o block.o WBC.o
+	$(CC) $(CFLAGS) -o ../AES AES.o maths.o cipher.o block.o WBC.o
 
 AES.o: AES.c $(INCLUDEDIR)/AES.h
 	$(CC) $(CFLAGS) $(CPPFLAGS) -c $<
@@ -16,9 +16,6 @@ maths.o: maths.c $(INCLUDEDIR)/maths.h
 	$(CC) $(CFLAGS) $(CPPFLAGS) -c $<
 
 cipher.o: cipher.c $(INCLUDEDIR)/cipher.h
-	$(CC) $(CFLAGS) $(CPPFLAGS) -c $<
-
-state.o: state.c $(INCLUDEDIR)/state.h
 	$(CC) $(CFLAGS) $(CPPFLAGS) -c $<
 
 block.o: block.c $(INCLUDEDIR)/block.h

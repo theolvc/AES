@@ -9,13 +9,12 @@
 #include <stdlib.h>
 
 #include "maths.h"
-#include "state.h"
 
 void expansionKey(uint8_t* key, uint8_t* expanded_key, int round);
-void cipher(state_t* b, uint8_t* expanded_key);
-void decipher(state_t* b, uint8_t* expanded_key);
+void cipher(uint8_t b[16], uint8_t* expanded_key, int round);
+void decipher(uint8_t b[16], uint8_t* expanded_key, int round);
 
-void ShiftRows(state_t* b);
+void ShiftRows(uint8_t b[16]);
 uint8_t get_Sbox(uint8_t index);
 
 #endif /* CIPHER_H */
